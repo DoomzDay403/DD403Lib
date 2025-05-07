@@ -1,4 +1,4 @@
--- D00MLib: A simple and intuitive Roblox UI library
+-- D00MLib: A simple Roblox UI library with an intuitive API
 local D00MLib = {}
 
 -- Services
@@ -6,19 +6,31 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
--- Utility functions
-local Utilities = {}
+-- Internal utilities
+local Internal = {}
 
-function Utilities:MakeDraggable(frame, parentFrame)
+-- Theme configuration
+Internal.Theme = {
+    WindowColor = Color3.fromRGB(30, 30, 30),
+    TitleBarColor = Color3.fromRGB(20, 20, 20),
+    TabColor = Color3.fromRGB(40, 40, 40),
+    SectionColor = Color3.fromRGB(35, 35, 35),
+    ButtonColor = Color3.fromRGB(50, 50, 50),
+    TextColor = Color3.fromRGB(255, 255, 255),
+    AccentColor = Color3.fromRGB(70, 70, 70),
+    Font = Enum.Font.SourceSans,
+    FontBold = Enum.Font.SourceSansBold,
+    TextSize = 14
+}
+
+-- Utility: Make a frame draggable
+function Internal:MakeDraggable(frame, parentFrame)
     local dragging, dragInput, dragStart, startPos
 
     local function updateInput(input)
         local delta = input.Position - dragStart
         frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        -- Ensure the parent frame (window) moves with the title bar
-        if parentFrame then
-            parentFrame.Position = frame.Position
-        end
+        parentFrame.Position = frame.Position -- Keep parent frame (window) in sync
     end
 
     frame.InputBegan:Connect(function(input)
@@ -48,48 +60,23 @@ function Utilities:MakeDraggable(frame, parentFrame)
     end)
 end
 
-function Utilities:ApplyCorner(instance, radius)
+-- Utility: Apply rounded corners
+function Internal:ApplyCorner(instance, radius)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius or 6)
     corner.Parent = instance
 end
 
-function Utilities:Tween(instance, properties, duration)
+-- Utility: Tween animation
+function Internal:Tween(instance, properties, duration)
     local tweenInfo = TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local tween = TweenService:Create(instance, tweenInfo, properties)
     tween:Play()
     return tween
 end
 
--- Simple theme
-local Theme = {
-    WindowColor = Color3.fromRGB(30, 30, 30),
-    TitleBarColor = Color3.fromRGB(20, 20, 20),
-    TabColor = Color3.fromRGB(40, 40, 40),
-    SectionColor = Color3.fromRGB(35, 35, 35),
-    ButtonColor = Color3.fromRGB(50, 50, 50),
-    TextColor = Color3.fromRGB(255, 255, 255),
-    AccentColor = Color3.fromRGB(70, 70, 70),
-    Font = Enum.Font.SourceSans,
-    FontBold = Enum.Font.SourceSansBold,
-    TextSize = 14
-}
-
--- Window component
-local Window = {}
-
-function Window.new(config)
-    config = config or {}
-    local self = {
-        Name = config.Name or "D00MLib", -- Keep original naming
-        Instance = nil,
-        TabContainer = nil,
-        ContentContainer = nil,
-        Tabs = {},
-        ActiveTab = nil
-    }
-
-    -- Wait for LocalPlayer and PlayerGui to be fully loaded
+-- Internal: Ensure PlayerGui is ready
+function Internal:WaitForPlayerGui()
     local player = Players.LocalPlayer
     if not player then
         Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
@@ -100,38 +87,63 @@ function Window.new(config)
         warn("D00MLib: PlayerGui not found")
         return nil
     end
+    return playerGui
+end
 
-    -- Clean up any existing D00MLibGui to prevent conflicts
+-- Internal: Clean up existing GUI
+function Internal:CleanupGui(playerGui)
     local existingGui = playerGui:FindFirstChild("D00MLibGui")
     if existingGui then
         existingGui:Destroy()
     end
+end
+
+-- GUI class
+local GuiClass = {}
+GuiClass.__index = GuiClass
+
+function GuiClass.new(options)
+    local self = setmetatable({}, GuiClass)
+    options = options or {}
+
+    -- Ensure PlayerGui is ready
+    local playerGui = Internal:WaitForPlayerGui()
+    if not playerGui then
+        return nil
+    end
+
+    -- Clean up existing GUI
+    Internal:CleanupGui(playerGui)
+
+    self.Name = options.Name or "D00MLib"
+    self.Tabs = {}
+    self.ActiveTab = nil
 
     -- Create ScreenGui
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "D00MLibGui"
-    screenGui.Parent = playerGui
-    screenGui.ResetOnSpawn = false
+    self.ScreenGui = Instance.new("ScreenGui")
+    self.ScreenGui.Name = "D00MLibGui"
+    self.ScreenGui.Parent = playerGui
+    self.ScreenGui.ResetOnSpawn = false
 
     -- Create main window frame
-    self.Instance = Instance.new("Frame")
-    self.Instance.Size = UDim2.new(0, 400, 0, 300)
-    self.Instance.Position = UDim2.new(0.5, -200, 0.5, -150)
-    self.Instance.BackgroundColor3 = Theme.WindowColor
-    self.Instance.BorderSizePixel = 0
-    self.Instance.Parent = screenGui
+    self.WindowFrame = Instance.new("Frame")
+    self.WindowFrame.Size = UDim2.new(0, 400, 0, 300)
+    self.WindowFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+    self.WindowFrame.BackgroundColor3 = Internal.Theme.WindowColor
+    self.WindowFrame.BorderSizePixel = 0
+    self.WindowFrame.Parent = self.ScreenGui
 
-    Utilities:ApplyCorner(self.Instance)
+    Internal:ApplyCorner(self.WindowFrame)
 
     -- Create title bar
-    local titleBar = Instance.new("Frame")
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.BackgroundColor3 = Theme.TitleBarColor
-    titleBar.BorderSizePixel = 0
-    titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.Parent = self.Instance -- Ensure title bar is parented to the window
+    self.TitleBar = Instance.new("Frame")
+    self.TitleBar.Size = UDim2.new(1, 0, 0, 30)
+    self.TitleBar.BackgroundColor3 = Internal.Theme.TitleBarColor
+    self.TitleBar.BorderSizePixel = 0
+    self.TitleBar.Position = UDim2.new(0, 0, 0, 0)
+    self.TitleBar.Parent = self.WindowFrame
 
-    Utilities:ApplyCorner(titleBar)
+    Internal:ApplyCorner(self.TitleBar)
 
     -- Title text
     local titleText = Instance.new("TextLabel")
@@ -139,131 +151,123 @@ function Window.new(config)
     titleText.Position = UDim2.new(0, 5, 0, 0)
     titleText.BackgroundTransparency = 1
     titleText.Text = self.Name
-    titleText.TextColor3 = Theme.TextColor
-    titleText.TextSize = Theme.TextSize
-    titleText.Font = Theme.FontBold
+    titleText.TextColor3 = Internal.Theme.TextColor
+    titleText.TextSize = Internal.Theme.TextSize
+    titleText.Font = Internal.Theme.FontBold
     titleText.TextXAlignment = Enum.TextXAlignment.Left
-    titleText.Parent = titleBar
+    titleText.Parent = self.TitleBar
 
-    -- Make window draggable with title bar tied to the window
-    Utilities:MakeDraggable(titleBar, self.Instance)
+    -- Make window draggable
+    Internal:MakeDraggable(self.TitleBar, self.WindowFrame)
 
     -- Create tab bar
-    self.TabContainer = Instance.new("Frame")
-    self.TabContainer.Size = UDim2.new(1, -10, 0, 30)
-    self.TabContainer.Position = UDim2.new(0, 5, 0, 35)
-    self.TabContainer.BackgroundTransparency = 1
-    self.TabContainer.Parent = self.Instance
+    self.TabBar = Instance.new("Frame")
+    self.TabBar.Size = UDim2.new(1, -10, 0, 30)
+    self.TabBar.Position = UDim2.new(0, 5, 0, 35)
+    self.TabBar.BackgroundTransparency = 1
+    self.TabBar.Parent = self.WindowFrame
 
     local tabLayout = Instance.new("UIListLayout")
     tabLayout.FillDirection = Enum.FillDirection.Horizontal
     tabLayout.Padding = UDim.new(0, 5)
     tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    tabLayout.Parent = self.TabContainer
+    tabLayout.Parent = self.TabBar
 
     -- Create content area
-    self.ContentContainer = Instance.new("Frame")
-    self.ContentContainer.Size = UDim2.new(1, -10, 1, -70)
-    self.ContentContainer.Position = UDim2.new(0, 5, 0, 70)
-    self.ContentContainer.BackgroundTransparency = 1
-    self.ContentContainer.Parent = self.Instance
-
-    -- Window API
-    function self:CreateTab(tabConfig)
-        local tab = D00MLib.Components.Tab.new(tabConfig, self)
-        table.insert(self.Tabs, tab)
-        if not self.ActiveTab then
-            tab:Activate()
-            self.ActiveTab = tab
-        end
-        return tab
-    end
+    self.ContentArea = Instance.new("Frame")
+    self.ContentArea.Size = UDim2.new(1, -10, 1, -70)
+    self.ContentArea.Position = UDim2.new(0, 5, 0, 70)
+    self.ContentArea.BackgroundTransparency = 1
+    self.ContentArea.Parent = self.WindowFrame
 
     return self
 end
 
--- Tab component
-local Tab = {}
+function GuiClass:AddTab(name)
+    local tab = D00MLib.Classes.Tab.new(name, self)
+    table.insert(self.Tabs, tab)
+    if not self.ActiveTab then
+        tab:Activate()
+        self.ActiveTab = tab
+    end
+    return tab
+end
 
-function Tab.new(config, window)
-    config = config or {}
-    local self = {
-        Name = config.Name or "Tab",
-        Button = nil,
-        Content = nil,
-        Window = window,
-        Sections = {}
-    }
+-- Tab class
+local TabClass = {}
+TabClass.__index = TabClass
+
+function TabClass.new(name, gui)
+    local self = setmetatable({}, TabClass)
+    self.Name = name or "Tab"
+    self.Gui = gui
+    self.Sections = {}
 
     -- Create tab button
     self.Button = Instance.new("TextButton")
     self.Button.Size = UDim2.new(0, 80, 1, 0)
-    self.Button.BackgroundColor3 = Theme.TabColor
+    self.Button.BackgroundColor3 = Internal.Theme.TabColor
     self.Button.Text = self.Name
-    self.Button.TextColor3 = Theme.TextColor
-    self.Button.TextSize = Theme.TextSize
-    self.Button.Font = Theme.Font
-    self.Button.Parent = window.TabContainer
+    self.Button.TextColor3 = Internal.Theme.TextColor
+    self.Button.TextSize = Internal.Theme.TextSize
+    self.Button.Font = Internal.Theme.Font
+    self.Button.Parent = gui.TabBar
 
-    Utilities:ApplyCorner(self.Button, 4)
+    Internal:ApplyCorner(self.Button, 4)
 
     -- Create tab content frame
     self.Content = Instance.new("Frame")
     self.Content.Size = UDim2.new(1, 0, 1, 0)
     self.Content.BackgroundTransparency = 1
     self.Content.Visible = false
-    self.Content.Parent = window.ContentContainer
+    self.Content.Parent = gui.ContentArea
 
     local listLayout = Instance.new("UIListLayout")
     listLayout.Padding = UDim.new(0, 5)
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     listLayout.Parent = self.Content
 
-    -- Tab activation
-    function self:Activate()
-        if window.ActiveTab then
-            window.ActiveTab.Content.Visible = false
-            Utilities:Tween(window.ActiveTab.Button, {BackgroundColor3 = Theme.TabColor}, 0.2)
-        end
-        self.Content.Visible = true
-        window.ActiveTab = self
-        Utilities:Tween(self.Button, {BackgroundColor3 = Theme.AccentColor}, 0.2)
-    end
-
     -- Tab button click
     self.Button.MouseButton1Click:Connect(function()
         self:Activate()
     end)
 
-    -- Tab API
-    function self:CreateSection(sectionConfig)
-        local section = D00MLib.Components.Section.new(sectionConfig, self.Content)
-        table.insert(self.Sections, section)
-        return section
-    end
-
     return self
 end
 
--- Section component
-local Section = {}
+function TabClass:Activate()
+    if self.Gui.ActiveTab then
+        self.Gui.ActiveTab.Content.Visible = false
+        Internal:Tween(self.Gui.ActiveTab.Button, {BackgroundColor3 = Internal.Theme.TabColor}, 0.2)
+    end
+    self.Content.Visible = true
+    self.Gui.ActiveTab = self
+    Internal:Tween(self.Button, {BackgroundColor3 = Internal.Theme.AccentColor}, 0.2)
+end
 
-function Section.new(config, parent)
-    config = config or {}
-    local self = {
-        Name = config.Name or "Section",
-        Instance = nil,
-        Components = {}
-    }
+function TabClass:AddSection(name)
+    local section = D00MLib.Classes.Section.new(name, self.Content)
+    table.insert(self.Sections, section)
+    return section
+end
+
+-- Section class
+local SectionClass = {}
+SectionClass.__index = SectionClass
+
+function SectionClass.new(name, parent)
+    local self = setmetatable({}, SectionClass)
+    self.Name = name or "Section"
+    self.Components = {}
 
     -- Create section frame
-    self.Instance = Instance.new("Frame")
-    self.Instance.Size = UDim2.new(1, 0, 0, 0)
-    self.Instance.BackgroundColor3 = Theme.SectionColor
-    self.Instance.AutomaticSize = Enum.AutomaticSize.Y
-    self.Instance.Parent = parent
+    self.Frame = Instance.new("Frame")
+    self.Frame.Size = UDim2.new(1, 0, 0, 0)
+    self.Frame.BackgroundColor3 = Internal.Theme.SectionColor
+    self.Frame.AutomaticSize = Enum.AutomaticSize.Y
+    self.Frame.Parent = parent
 
-    Utilities:ApplyCorner(self.Instance, 4)
+    Internal:ApplyCorner(self.Frame, 4)
 
     -- Section padding
     local padding = Instance.new("UIPadding")
@@ -271,95 +275,90 @@ function Section.new(config, parent)
     padding.PaddingBottom = UDim.new(0, 5)
     padding.PaddingLeft = UDim.new(0, 5)
     padding.PaddingRight = UDim.new(0, 5)
-    padding.Parent = self.Instance
+    padding.Parent = self.Frame
 
     -- Section layout
     local listLayout = Instance.new("UIListLayout")
     listLayout.Padding = UDim.new(0, 5)
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Parent = self.Instance
+    listLayout.Parent = self.Frame
 
     -- Section label
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0, 20)
     label.BackgroundTransparency = 1
     label.Text = self.Name
-    label.TextColor3 = Theme.TextColor
-    label.TextSize = Theme.TextSize
-    label.Font = Theme.FontBold
+    label.TextColor3 = Internal.Theme.TextColor
+    label.TextSize = Internal.Theme.TextSize
+    label.Font = Internal.Theme.FontBold
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = self.Instance
-
-    -- Section API
-    function self:CreateButton(buttonConfig)
-        local button = D00MLib.Components.Button.new(buttonConfig, self.Instance)
-        table.insert(self.Components, button)
-        return button
-    end
-
-    function self:CreateSlider(sliderConfig)
-        local slider = D00MLib.Components.Slider.new(sliderConfig, self.Instance)
-        table.insert(self.Components, slider)
-        return slider
-    end
+    label.Parent = self.Frame
 
     return self
 end
 
--- Button component
-local Button = {}
+function SectionClass:AddButton(name, callback)
+    local button = D00MLib.Classes.Button.new(name, callback, self.Frame)
+    table.insert(self.Components, button)
+    return button
+end
 
-function Button.new(config, parent)
-    config = config or {}
-    local self = {
-        Name = config.Name or "Button",
-        Callback = config.Callback or function() end,
-        Instance = nil
-    }
+function SectionClass:AddSlider(name, min, max, default, callback)
+    local slider = D00MLib.Classes.Slider.new(name, min, max, default, callback, self.Frame)
+    table.insert(self.Components, slider)
+    return slider
+end
+
+-- Button class
+local ButtonClass = {}
+ButtonClass.__index = ButtonClass
+
+function ButtonClass.new(name, callback, parent)
+    local self = setmetatable({}, ButtonClass)
+    self.Name = name or "Button"
+    self.Callback = callback or function() end
 
     -- Create button
-    self.Instance = Instance.new("TextButton")
-    self.Instance.Size = UDim2.new(1, 0, 0, 30)
-    self.Instance.BackgroundColor3 = Theme.ButtonColor
-    self.Instance.Text = self.Name
-    self.Instance.TextColor3 = Theme.TextColor
-    self.Instance.TextSize = Theme.TextSize
-    self.Instance.Font = Theme.Font
-    self.Instance.Parent = parent
+    self.Button = Instance.new("TextButton")
+    self.Button.Size = UDim2.new(1, 0, 0, 30)
+    self.Button.BackgroundColor3 = Internal.Theme.ButtonColor
+    self.Button.Text = self.Name
+    self.Button.TextColor3 = Internal.Theme.TextColor
+    self.Button.TextSize = Internal.Theme.TextSize
+    self.Button.Font = Internal.Theme.Font
+    self.Button.Parent = parent
 
-    Utilities:ApplyCorner(self.Instance, 4)
+    Internal:ApplyCorner(self.Button, 4)
 
     -- Button interaction
-    self.Instance.MouseButton1Click:Connect(function()
+    self.Button.MouseButton1Click:Connect(function()
         self.Callback()
     end)
 
     -- Hover animation
-    self.Instance.MouseEnter:Connect(function()
-        Utilities:Tween(self.Instance, {BackgroundColor3 = Theme.AccentColor}, 0.2)
+    self.Button.MouseEnter:Connect(function()
+        Internal:Tween(self.Button, {BackgroundColor3 = Internal.Theme.AccentColor}, 0.2)
     end)
 
-    self.Instance.MouseLeave:Connect(function()
-        Utilities:Tween(self.Instance, {BackgroundColor3 = Theme.ButtonColor}, 0.2)
+    self.Button.MouseLeave:Connect(function()
+        Internal:Tween(self.Button, {BackgroundColor3 = Internal.Theme.ButtonColor}, 0.2)
     end)
 
     return self
 end
 
--- Slider component
-local Slider = {}
+-- Slider class
+local SliderClass = {}
+SliderClass.__index = SliderClass
 
-function Slider.new(config, parent)
-    config = config or {}
-    local self = {
-        Name = config.Name or "Slider",
-        Min = config.Min or 0,
-        Max = config.Max or 100,
-        Default = config.Default or 50,
-        Callback = config.Callback or function() end,
-        Instance = nil,
-        Value = config.Default
-    }
+function SliderClass.new(name, min, max, default, callback, parent)
+    local self = setmetatable({}, SliderClass)
+    self.Name = name or "Slider"
+    self.Min = min or 0
+    self.Max = max or 100
+    self.Default = default or 50
+    self.Callback = callback or function() end
+    self.Value = self.Default
 
     -- Validate slider range
     if self.Min >= self.Max then
@@ -368,39 +367,39 @@ function Slider.new(config, parent)
     self.Value = math.clamp(self.Default, self.Min, self.Max)
 
     -- Create slider frame
-    self.Instance = Instance.new("Frame")
-    self.Instance.Size = UDim2.new(1, 0, 0, 50)
-    self.Instance.BackgroundTransparency = 1
-    self.Instance.Parent = parent
+    self.Frame = Instance.new("Frame")
+    self.Frame.Size = UDim2.new(1, 0, 0, 50)
+    self.Frame.BackgroundTransparency = 1
+    self.Frame.Parent = parent
 
     -- Slider label
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -10, 0, 20)
-    label.Position = UDim2.new(0, 5, 0, 5)
-    label.BackgroundTransparency = 1
-    label.Text = self.Name .. ": " .. self.Value
-    label.TextColor3 = Theme.TextColor
-    label.TextSize = Theme.TextSize
-    label.Font = Theme.Font
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = self.Instance
+    self.Label = Instance.new("TextLabel")
+    self.Label.Size = UDim2.new(1, -10, 0, 20)
+    self.Label.Position = UDim2.new(0, 5, 0, 5)
+    self.Label.BackgroundTransparency = 1
+    self.Label.Text = self.Name .. ": " .. self.Value
+    self.Label.TextColor3 = Internal.Theme.TextColor
+    self.Label.TextSize = Internal.Theme.TextSize
+    self.Label.Font = Internal.Theme.Font
+    self.Label.TextXAlignment = Enum.TextXAlignment.Left
+    self.Label.Parent = self.Frame
 
     -- Slider bar
     local sliderBar = Instance.new("Frame")
     sliderBar.Size = UDim2.new(1, -10, 0, 10)
     sliderBar.Position = UDim2.new(0, 5, 0, 30)
-    sliderBar.BackgroundColor3 = Theme.ButtonColor
-    sliderBar.Parent = self.Instance
+    sliderBar.BackgroundColor3 = Internal.Theme.ButtonColor
+    sliderBar.Parent = self.Frame
 
-    Utilities:ApplyCorner(sliderBar, 4)
+    Internal:ApplyCorner(sliderBar, 4)
 
     -- Slider fill
-    local sliderFill = Instance.new("Frame")
-    sliderFill.Size = UDim2.new((self.Value - self.Min) / (self.Max - self.Min), 0, 1, 0)
-    sliderFill.BackgroundColor3 = Theme.AccentColor
-    sliderFill.Parent = sliderBar
+    self.Fill = Instance.new("Frame")
+    self.Fill.Size = UDim2.new((self.Value - self.Min) / (self.Max - self.Min), 0, 1, 0)
+    self.Fill.BackgroundColor3 = Internal.Theme.AccentColor
+    self.Fill.Parent = sliderBar
 
-    Utilities:ApplyCorner(sliderFill, 4)
+    Internal:ApplyCorner(self.Fill, 4)
 
     -- Slider interaction
     local dragging = false
@@ -424,8 +423,8 @@ function Slider.new(config, parent)
             local barWidth = sliderBar.AbsoluteSize.X
             local relativeX = math.clamp((mouseX - barPos) / barWidth, 0, 1)
             self.Value = math.floor(self.Min + (self.Max - self.Min) * relativeX)
-            sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
-            label.Text = self.Name .. ": " .. self.Value
+            self.Fill.Size = UDim2.new(relativeX, 0, 1, 0)
+            self.Label.Text = self.Name .. ": " .. self.Value
             self.Callback(self.Value)
         end
     end)
@@ -433,17 +432,18 @@ function Slider.new(config, parent)
     return self
 end
 
--- Component registry
-D00MLib.Components = {
-    Tab = Tab,
-    Section = Section,
-    Button = Button,
-    Slider = Slider
+-- Class registry
+D00MLib.Classes = {
+    Gui = GuiClass,
+    Tab = TabClass,
+    Section = SectionClass,
+    Button = ButtonClass,
+    Slider = SliderClass
 }
 
--- Main API
-function D00MLib:CreateWindow(config)
-    return Window.new(config)
+-- Public API
+function D00MLib:MakeGui(options)
+    return self.Classes.Gui.new(options)
 end
 
 return D00MLib
