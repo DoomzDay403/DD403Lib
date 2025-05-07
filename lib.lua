@@ -81,7 +81,7 @@ local Window = {}
 function Window.new(config)
     config = config or {}
     local self = {
-        Name = config.Name or "D00MLib", -- Revert to original naming
+        Name = config.Name or "D00MLib", -- Keep original naming
         Instance = nil,
         TabContainer = nil,
         ContentContainer = nil,
@@ -99,6 +99,12 @@ function Window.new(config)
     if not playerGui then
         warn("D00MLib: PlayerGui not found")
         return nil
+    end
+
+    -- Clean up any existing D00MLibGui to prevent conflicts
+    local existingGui = playerGui:FindFirstChild("D00MLibGui")
+    if existingGui then
+        existingGui:Destroy()
     end
 
     -- Create ScreenGui
