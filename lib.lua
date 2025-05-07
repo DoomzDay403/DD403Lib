@@ -5,9 +5,10 @@ local D00MLib = {}
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
--- Utility functions
+-- Utility functions for common tasks
 local Utilities = {}
 
+-- Make a frame draggable
 function Utilities:MakeDraggable(frame)
     local dragging, dragInput, dragStart, startPos
 
@@ -43,12 +44,14 @@ function Utilities:MakeDraggable(frame)
     end)
 end
 
+-- Apply rounded corners to an instance
 function Utilities:ApplyCorner(instance, radius)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius or 6)
     corner.Parent = instance
 end
 
+-- Tween an instance's properties
 function Utilities:Tween(instance, properties, duration)
     local tweenInfo = TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local tween = TweenService:Create(instance, tweenInfo, properties)
@@ -56,14 +59,15 @@ function Utilities:Tween(instance, properties, duration)
     return tween
 end
 
--- Simple theme
+-- Simple dark theme
 local Theme = {
-    WindowColor = Color3.fromRGB(35, 35, 35),
-    TitleBarColor = Color3.fromRGB(25, 25, 25),
-    TabColor = Color3.fromRGB(45, 45, 45),
-    SectionColor = Color3.fromRGB(40, 40, 40),
-    ButtonColor = Color3.fromRGB(60, 60, 60),
+    WindowColor = Color3.fromRGB(30, 30, 30),
+    TitleBarColor = Color3.fromRGB(20, 20, 20),
+    TabColor = Color3.fromRGB(40, 40, 40),
+    SectionColor = Color3.fromRGB(35, 35, 35),
+    ButtonColor = Color3.fromRGB(50, 50, 50),
     TextColor = Color3.fromRGB(255, 255, 255),
+    AccentColor = Color3.fromRGB(100, 100, 100),
     Font = Enum.Font.SourceSans,
     FontBold = Enum.Font.SourceSansBold,
     TextSize = 14
@@ -202,7 +206,7 @@ function Tab.new(config, window)
         end
         self.Content.Visible = true
         window.ActiveTab = self
-        Utilities:Tween(self.Button, {BackgroundColor3 = Theme.TabColor + Color3.fromRGB(20, 20, 20)}, 0.2)
+        Utilities:Tween(self.Button, {BackgroundColor3 = Theme.AccentColor}, 0.2)
     end
 
     -- Tab button click
@@ -254,6 +258,17 @@ function Section.new(config, parent)
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     listLayout.Parent = self.Instance
 
+    -- Section label
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = self.Name
+    label.TextColor3 = Theme.TextColor
+    label.TextSize = Theme.TextSize
+    label.Font = Theme.FontBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = self.Instance
+
     -- Section API
     function self:AddButton(buttonConfig)
         local button = D00MLib.Components.Button.new(buttonConfig, self.Instance)
@@ -300,7 +315,7 @@ function Button.new(config, parent)
 
     -- Hover animation
     self.Instance.MouseEnter:Connect(function()
-        Utilities:Tween(self.Instance, {BackgroundColor3 = Theme.ButtonColor + Color3.fromRGB(20, 20, 20)}, 0.2)
+        Utilities:Tween(self.Instance, {BackgroundColor3 = Theme.AccentColor}, 0.2)
     end)
 
     self.Instance.MouseLeave:Connect(function()
@@ -325,17 +340,22 @@ function Slider.new(config, parent)
         Value = config.Default
     }
 
+    -- Validate slider range
+    if self.Min >= self.Max then
+        warn("D00MLib: Slider Min (" .. self.Min .. ") must be less than Max (" .. self.Max .. ")")
+        self.Min, self.Max = 0, 100
+    end
+    self.Value = math.clamp(self.Default, self.Min, self.Max)
+
     -- Create slider frame
     self.Instance = Instance.new("Frame")
     self.Instance.Size = UDim2.new(1, 0, 0, 50)
-    self.Instance.BackgroundColor3 = Theme.SectionColor
+    self.Instance.BackgroundTransparency = 1
     self.Instance.Parent = parent
-
-    Utilities:ApplyCorner(self.Instance, 4)
 
     -- Slider label
     local label = Instance.new("TextLabel")
- label.Size = UDim2.new(1, -10, 0, 20)
+    label.Size = UDim2.new(1, -10, 0, 20)
     label.Position = UDim2.new(0, 5, 0, 5)
     label.BackgroundTransparency = 1
     label.Text = self.Name .. ": " .. self.Value
@@ -357,7 +377,7 @@ function Slider.new(config, parent)
     -- Slider fill
     local sliderFill = Instance.new("Frame")
     sliderFill.Size = UDim2.new((self.Value - self.Min) / (self.Max - self.Min), 0, 1, 0)
-    sliderFill.BackgroundColor3 = Theme.TextColor
+    sliderFill.BackgroundColor3 = Theme.AccentColor
     sliderFill.Parent = sliderBar
 
     Utilities:ApplyCorner(sliderFill, 4)
@@ -383,7 +403,7 @@ function Slider.new(config, parent)
             local barPos = sliderBar.AbsolutePosition.X
             local barWidth = sliderBar.AbsoluteSize.X
             local relativeX = math.clamp((mouseX - barPos) / barWidth, 0, 1)
-            self.Value = math.floor(self.Min + (self.Max - self.Min) * relativeX)
+            self.Value = math.round(self.Min + (self.Max - self.Min) * relativeX)
             sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
             label.Text = self.Name .. ": " .. self.Value
             self.Callback(self.Value)
