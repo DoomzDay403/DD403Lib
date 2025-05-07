@@ -2,19 +2,23 @@
 local D00MLib = {}
 
 -- Services
+local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
--- Utility functions for common tasks
+-- Utility functions
 local Utilities = {}
 
--- Make a frame draggable
-function Utilities:MakeDraggable(frame)
+function Utilities:MakeDraggable(frame, parentFrame)
     local dragging, dragInput, dragStart, startPos
 
     local function updateInput(input)
         local delta = input.Position - dragStart
         frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        -- Ensure the parent frame (window) moves with the title bar
+        if parentFrame then
+            parentFrame.Position = frame.Position
+        end
     end
 
     frame.InputBegan:Connect(function(input)
@@ -44,14 +48,12 @@ function Utilities:MakeDraggable(frame)
     end)
 end
 
--- Apply rounded corners to an instance
 function Utilities:ApplyCorner(instance, radius)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius or 6)
     corner.Parent = instance
 end
 
--- Tween an instance's properties
 function Utilities:Tween(instance, properties, duration)
     local tweenInfo = TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     local tween = TweenService:Create(instance, tweenInfo, properties)
@@ -59,7 +61,7 @@ function Utilities:Tween(instance, properties, duration)
     return tween
 end
 
--- Simple dark theme
+-- Simple theme
 local Theme = {
     WindowColor = Color3.fromRGB(30, 30, 30),
     TitleBarColor = Color3.fromRGB(20, 20, 20),
@@ -67,7 +69,7 @@ local Theme = {
     SectionColor = Color3.fromRGB(35, 35, 35),
     ButtonColor = Color3.fromRGB(50, 50, 50),
     TextColor = Color3.fromRGB(255, 255, 255),
-    AccentColor = Color3.fromRGB(100, 100, 100),
+    AccentColor = Color3.fromRGB(70, 70, 70),
     Font = Enum.Font.SourceSans,
     FontBold = Enum.Font.SourceSansBold,
     TextSize = 14
@@ -79,7 +81,7 @@ local Window = {}
 function Window.new(config)
     config = config or {}
     local self = {
-        Name = config.Name or "D00MLib",
+        Name = config.Name or "D00MLib", -- Revert to original naming
         Instance = nil,
         TabContainer = nil,
         ContentContainer = nil,
@@ -87,10 +89,22 @@ function Window.new(config)
         ActiveTab = nil
     }
 
+    -- Wait for LocalPlayer and PlayerGui to be fully loaded
+    local player = Players.LocalPlayer
+    if not player then
+        Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+        player = Players.LocalPlayer
+    end
+    local playerGui = player:WaitForChild("PlayerGui", 10)
+    if not playerGui then
+        warn("D00MLib: PlayerGui not found")
+        return nil
+    end
+
     -- Create ScreenGui
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "D00MLibGui"
-    screenGui.Parent = game.Players.LocalPlayer.PlayerGui
+    screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
 
     -- Create main window frame
@@ -108,7 +122,8 @@ function Window.new(config)
     titleBar.Size = UDim2.new(1, 0, 0, 30)
     titleBar.BackgroundColor3 = Theme.TitleBarColor
     titleBar.BorderSizePixel = 0
-    titleBar.Parent = self.Instance
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.Parent = self.Instance -- Ensure title bar is parented to the window
 
     Utilities:ApplyCorner(titleBar)
 
@@ -124,8 +139,8 @@ function Window.new(config)
     titleText.TextXAlignment = Enum.TextXAlignment.Left
     titleText.Parent = titleBar
 
-    -- Make window draggable
-    Utilities:MakeDraggable(titleBar)
+    -- Make window draggable with title bar tied to the window
+    Utilities:MakeDraggable(titleBar, self.Instance)
 
     -- Create tab bar
     self.TabContainer = Instance.new("Frame")
@@ -148,7 +163,7 @@ function Window.new(config)
     self.ContentContainer.Parent = self.Instance
 
     -- Window API
-    function self:AddTab(tabConfig)
+    function self:CreateTab(tabConfig)
         local tab = D00MLib.Components.Tab.new(tabConfig, self)
         table.insert(self.Tabs, tab)
         if not self.ActiveTab then
@@ -215,7 +230,7 @@ function Tab.new(config, window)
     end)
 
     -- Tab API
-    function self:AddSection(sectionConfig)
+    function self:CreateSection(sectionConfig)
         local section = D00MLib.Components.Section.new(sectionConfig, self.Content)
         table.insert(self.Sections, section)
         return section
@@ -270,13 +285,13 @@ function Section.new(config, parent)
     label.Parent = self.Instance
 
     -- Section API
-    function self:AddButton(buttonConfig)
+    function self:CreateButton(buttonConfig)
         local button = D00MLib.Components.Button.new(buttonConfig, self.Instance)
         table.insert(self.Components, button)
         return button
     end
 
-    function self:AddSlider(sliderConfig)
+    function self:CreateSlider(sliderConfig)
         local slider = D00MLib.Components.Slider.new(sliderConfig, self.Instance)
         table.insert(self.Components, slider)
         return slider
@@ -342,7 +357,6 @@ function Slider.new(config, parent)
 
     -- Validate slider range
     if self.Min >= self.Max then
-        warn("D00MLib: Slider Min (" .. self.Min .. ") must be less than Max (" .. self.Max .. ")")
         self.Min, self.Max = 0, 100
     end
     self.Value = math.clamp(self.Default, self.Min, self.Max)
@@ -403,7 +417,7 @@ function Slider.new(config, parent)
             local barPos = sliderBar.AbsolutePosition.X
             local barWidth = sliderBar.AbsoluteSize.X
             local relativeX = math.clamp((mouseX - barPos) / barWidth, 0, 1)
-            self.Value = math.round(self.Min + (self.Max - self.Min) * relativeX)
+            self.Value = math.floor(self.Min + (self.Max - self.Min) * relativeX)
             sliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
             label.Text = self.Name .. ": " .. self.Value
             self.Callback(self.Value)
@@ -422,7 +436,7 @@ D00MLib.Components = {
 }
 
 -- Main API
-function D00MLib:MakeWindow(config)
+function D00MLib:CreateWindow(config)
     return Window.new(config)
 end
 
